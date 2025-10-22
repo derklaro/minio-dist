@@ -193,9 +193,7 @@ jobs:
 
   update_docker_hub_description:
     name: Update Dockerhub description
-    needs: publish_release
     runs-on: ubuntu-latest
-    if: ${{ needs.check_tags.outputs.latest_mio_tag != needs.check_tags.outputs.latest_local_tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
