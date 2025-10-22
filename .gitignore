@@ -1,0 +1,10 @@
+# ignore everything by default
+*
+
+# only include relevant files
+!.gitignore
+!.github/
+!.github/**/*
+!README.md
+!Dockerfile
+!license.txt
