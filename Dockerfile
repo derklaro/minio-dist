@@ -9,7 +9,7 @@ RUN curl -s -q https://dl.min.io/client/mc/release/linux-${TARGETARCH}/mc -o mc 
 COPY dist/minio minio
 RUN chmod +x minio
 
-FROM registry.access.redhat.com/ubi9/ubi-micro:latest
+FROM registry.access.redhat.com/ubi10-micro:latest
 
 ARG RELEASE
 
