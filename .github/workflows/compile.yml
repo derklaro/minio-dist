@@ -40,7 +40,7 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { goos: linux, goarch: ppc64le, docker: false }
+          - { goos: linux, goarch: ppc64le, docker: true }
           - { goos: linux, goarch: mips, docker: false }
           - { goos: linux, goarch: mips64, docker: false }
           - { goos: linux, goarch: amd64, docker: true }
@@ -125,12 +125,77 @@ jobs:
           file: "Dockerfile"
           context: "minio-src"
           sbom: true
-          provenance: true
+          provenance: false
           platforms: "${{ matrix.goos }}/${{ matrix.goarch }}"
           tags: docker.io/derklaro/minio:${{ needs.check_tags.outputs.latest_mio_tag }}-${{ matrix.goarch }}
           build-args: |
             RELEASE=${{ needs.check_tags.outputs.latest_mio_tag }}
             TARGETARCH=${{ matrix.goos }}/${{ matrix.goarch }}
+
+  create_manifest:
+    name: Create Multi-Arch Manifest
+    needs:
+      - check_tags
+      - compile
+    runs-on: ubuntu-latest
+    if: ${{ needs.check_tags.outputs.latest_mio_tag != needs.check_tags.outputs.latest_local_tag }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          RELEASE="${{ needs.check_tags.outputs.latest_mio_tag }}"
+          
+          docker manifest create \
+            docker.io/derklaro/minio:RELEASE.${RELEASE} \
+            docker.io/derklaro/minio:${RELEASE}-amd64 \
+            docker.io/derklaro/minio:${RELEASE}-arm64 \
+            docker.io/derklaro/minio:${RELEASE}-ppc64le
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:RELEASE.${RELEASE} \
+            docker.io/derklaro/minio:${RELEASE}-amd64 \
+            --os linux --arch amd64
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:RELEASE.${RELEASE} \
+            docker.io/derklaro/minio:${RELEASE}-arm64 \
+            --os linux --arch arm64
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:RELEASE.${RELEASE} \
+            docker.io/derklaro/minio:${RELEASE}-ppc64le \
+            --os linux --arch ppc64le
+          
+          docker manifest push docker.io/derklaro/minio:RELEASE.${RELEASE}
+          
+          docker manifest create \
+            docker.io/derklaro/minio:latest \
+            docker.io/derklaro/minio:${RELEASE}-amd64 \
+            docker.io/derklaro/minio:${RELEASE}-arm64 \
+            docker.io/derklaro/minio:${RELEASE}-ppc64le
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:latest \
+            docker.io/derklaro/minio:${RELEASE}-amd64 \
+            --os linux --arch amd64
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:latest \
+            docker.io/derklaro/minio:${RELEASE}-arm64 \
+            --os linux --arch arm64
+          
+          docker manifest annotate \
+            docker.io/derklaro/minio:latest \
+            docker.io/derklaro/minio:${RELEASE}-ppc64le \
+            --os linux --arch ppc64le
+          
+          docker manifest push docker.io/derklaro/minio:latest
+
 
   publish_release:
     name: Publish Release
