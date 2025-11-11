@@ -18,6 +18,7 @@ jobs:
     outputs:
       latest_mio_tag: ${{ steps.tags.outputs.upstream_tag }}
       latest_local_tag: ${{ steps.tags.outputs.local_release }}
+      latest_mio_release_time: ${{ steps.tags.outputs.latest_mio_release_time }}
     steps:
       - name: Get latest tag information
         id: tags
@@ -25,11 +26,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           LATEST_MIO_TAG="$(git ls-remote --tags --refs --sort='-v:refname' "https://github.com/minio/minio.git" \
-            | grep -m1 RELEASE. | awk -F/ '{print $3}' | sed 's/\^{}//' | sed 's/^RELEASE\.//')"
+            | grep -m1 RELEASE. | awk -F/ '{print $3}' | sed 's/\^{}//')"
+          LATEST_MIO_RELEASE_TIME="$(echo "$LATEST_MIO_TAG" | sed 's/^RELEASE\.//')"
           LATEST_LOCAL_RELEASE="$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq '.tag_name' || true)"
 
           echo "upstream_tag=$LATEST_MIO_TAG" >> "$GITHUB_OUTPUT"
           echo "local_release=$LATEST_LOCAL_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "latest_mio_release_time=$LATEST_MIO_RELEASE_TIME" >> "$GITHUB_OUTPUT"
 
   compile:
     name: Compile Binary (${{ matrix.goos }}/${{ matrix.goarch }})
@@ -72,7 +75,7 @@ jobs:
 
       - name: Clone MinIO
         run: |
-          git clone --depth=1 --branch RELEASE.${{ needs.check_tags.outputs.latest_mio_tag }} https://github.com/minio/minio.git minio-src
+          git clone --depth=1 --branch ${{ needs.check_tags.outputs.latest_mio_tag }} https://github.com/minio/minio.git minio-src
 
       - name: Generate ldflags
         id: gen_ldflags
@@ -80,7 +83,7 @@ jobs:
         env:
           MINIO_RELEASE: "RELEASE"
         run: |
-          LDFLAGS=$(go run buildscripts/gen-ldflags.go ${{ needs.check_tags.outputs.latest_mio_tag }})
+          LDFLAGS=$(go run buildscripts/gen-ldflags.go ${{ needs.check_tags.outputs.latest_mio_release_time }})
           echo "ldflags=$LDFLAGS" >> $GITHUB_OUTPUT
 
       - name: Build binary
@@ -212,8 +215,8 @@ jobs:
           tag_name: ${{ needs.check_tags.outputs.latest_mio_tag }}
           fail_on_unmatched_files: true
           body: |
-            Automated binary publish of minio version released on ${{ needs.check_tags.outputs.latest_mio_tag }}
-            See: https://github.com/minio/minio/releases/tag/RELEASE.${{ needs.check_tags.outputs.latest_mio_tag }}
+            Automated binary publish of minio version ${{ needs.check_tags.outputs.latest_mio_tag }}
+            See: https://github.com/minio/minio/releases/tag/${{ needs.check_tags.outputs.latest_mio_tag }}
           files: |
             release/*.tar.gz
             release/*.zip
