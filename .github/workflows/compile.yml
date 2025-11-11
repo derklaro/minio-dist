@@ -127,7 +127,7 @@ jobs:
           push: true
           file: "Dockerfile"
           context: "minio-src"
-          sbom: true
+          sbom: false
           provenance: false
           platforms: "${{ matrix.goos }}/${{ matrix.goarch }}"
           tags: docker.io/derklaro/minio:${{ needs.check_tags.outputs.latest_mio_tag }}-${{ matrix.goarch }}
@@ -175,6 +175,7 @@ jobs:
     needs:
       - check_tags
       - compile
+      - create_manifest
     runs-on: ubuntu-latest
     if: ${{ needs.check_tags.outputs.latest_mio_tag != needs.check_tags.outputs.latest_local_tag }}
     permissions:
