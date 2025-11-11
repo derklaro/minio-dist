@@ -40,7 +40,7 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { goos: linux, goarch: ppc64le, docker: false }
+          - { goos: linux, goarch: ppc64le, docker: true }
           - { goos: linux, goarch: mips, docker: false }
           - { goos: linux, goarch: mips64, docker: false }
           - { goos: linux, goarch: amd64, docker: true }
@@ -125,12 +125,47 @@ jobs:
           file: "Dockerfile"
           context: "minio-src"
           sbom: true
-          provenance: true
+          provenance: false
           platforms: "${{ matrix.goos }}/${{ matrix.goarch }}"
           tags: docker.io/derklaro/minio:${{ needs.check_tags.outputs.latest_mio_tag }}-${{ matrix.goarch }}
           build-args: |
             RELEASE=${{ needs.check_tags.outputs.latest_mio_tag }}
             TARGETARCH=${{ matrix.goos }}/${{ matrix.goarch }}
+
+  create_manifest:
+    name: Create Multi-Arch Manifest
+    needs:
+      - check_tags
+      - compile
+    runs-on: ubuntu-latest
+    if: ${{ needs.check_tags.outputs.latest_mio_tag != needs.check_tags.outputs.latest_local_tag }}
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Create and push manifest
+        run: |
+          set -euox pipefail
+
+          ARCHS=("amd64" "arm64" "ppc64le")
+          IMAGE_BASE="docker.io/derklaro/minio"
+          RELEASE="${{ needs.check_tags.outputs.latest_mio_tag }}"
+
+          docker manifest create \
+            "${IMAGE_BASE}:${RELEASE}" \
+            $(for ARCH in "${ARCHS[@]}"; do echo "${IMAGE_BASE}:${RELEASE}-${ARCH}"; done)
+
+          for ARCH in "${ARCHS[@]}"; do
+            docker manifest annotate \
+              "${IMAGE_BASE}:${RELEASE}" \
+              "${IMAGE_BASE}:${RELEASE}-${ARCH}" \
+              --os linux --arch "${ARCH}"
+          done
+
+          docker manifest push "${IMAGE_BASE}:${RELEASE}"
 
   publish_release:
     name: Publish Release
